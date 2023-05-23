@@ -1,7 +1,7 @@
 from keras.datasets import mnist
-from random import uniform
+from random import uniform, randrange
+import matplotlib.pyplot as plt
 from math import e
-from matplotlib import pyplot
 import numpy as np
 
 
@@ -24,7 +24,7 @@ class Layer:
 
         for row_index in range(self.num_neurons):
             for col_index in range(prev_neurons):
-                self.weight_matrix[row_index][col_index] = uniform(-10, 10)
+                self.weight_matrix[row_index][col_index] = uniform(-1, 1)
 
         for index in range(self.num_neurons):
             self.biases[index] = uniform(1, 5)
@@ -35,7 +35,7 @@ class Layer:
     def set_activation_func(self, activation_func):
 
         if activation_func == 'sigmoid':
-            return lambda z: 1 / (1 + np.exp(-z))
+            return lambda z: 1.0 / (1.0 + np.exp(-z))
 
         elif activation_func == 'softmax':
             return lambda z, i: (e ** z[i]) / np.sum(e ** z)
@@ -46,14 +46,12 @@ class Layer:
         else:
             return lambda z: z
 
-    def set_activations(self, in_activations):
+    def set_activations(self, in_activations, index):
 
         self.in_activations = in_activations
-
-        if self.layer_type == 'input':
-            for index in range(self.num_neurons):
-                self.activations[index] = self.activation_func(
-                                                         in_activations[index])
+        if index == 0:
+            for act_index in range(self.num_neurons):
+                self.activations[act_index] = in_activations[act_index] / 255
 
         else:
             self.z = self.weight_matrix.dot(in_activations) + self.biases
@@ -93,15 +91,16 @@ class Network:
         self.activation_error = np.ndarray((self.num_layers,), dtype=object)
         (self.x_train, self.y_train), (self.x_test, self.y_test) = \
             mnist.load_data()
-        self.minibatch_size = 100
+        self.avg_loss = 0
+        self.training_size = 0
 
         self.init_layers()
 
     def init_layers(self):
 
-        for index in range(len(self.layers) - 1):
-            self.layers[index + 1].init_vectors(
-                                          self.layers[index].get_num_neurons())
+        for index in range(1, self.num_layers):
+            self.layers[index].init_vectors(
+                                      self.layers[index - 1].get_num_neurons())
 
     def set_layer_types(self):
 
@@ -111,72 +110,64 @@ class Network:
     def train(self):
 
         self.y_train = self.convert_y()
-        counter = 0
 
-        while counter < self.y_train.shape[0] / 5:
-            print(f'Training with minibatch: {counter / self.minibatch_size}')
-            self.backprop(counter)
-            counter += self.minibatch_size
+        for i in range(0, self.training_size):
+            self.backprop(i)
 
     def init_errors(self):
-
-        for index in range(self.num_layers - 1):
-            self.weight_error[index + 1] = np.zeros(self.layers[index + 1].
-                                                    weight_matrix.shape,
+        for index in range(1, self.num_layers):
+            self.weight_error[index] = np.zeros(self.layers[index].
+                                                weight_matrix.shape,
+                                                dtype=float)
+            self.activation_error[index] = np.zeros(self.layers[index].
+                                                    activations.shape,
                                                     dtype=float)
-            self.activation_error[index + 1] = np.zeros(self.layers[index + 1].
-                                                        activations.shape,
-                                                        dtype=float)
 
     def backprop(self, counter):
 
-        ending = counter + self.minibatch_size
-
+        self.input_image(self.x_train[counter].flatten())
         self.init_errors()
+        y = self.y_train[counter]
+        last = self.num_layers - 1
+        z = self.layers[last].z
+        activations = self.layers[last].activations
+        activation_func = self.layers[last].activation_func
+        derivative_sigmoid = (lambda z: activation_func(z) *
+                              (1 - activation_func(z)))
 
-        while ending > counter:
-            self.input_image(self.x_train[counter].flatten())
-            self.backprop_helper(self.num_layers - 1, self.y_train[counter])
-            counter += 1
+        self.avg_loss += (np.argmax(activations) - np.argmax(y)) ** 2
+        self.activation_error[last] = np.multiply((activations - y),
+                                                  derivative_sigmoid(z))
 
-        for index in range(self.num_layers - 1):
-            self.layers[index + 1].weight_matrix -= \
-                                                (self.weight_error[index + 1] /
-                                                 self.minibatch_size)
-            self.layers[index + 1].biases -= \
-                (self.activation_error[index + 1] /
-                 self.minibatch_size)
+        for index in range(self.num_layers - 2, 0, -1):
+            activations = self.layers[index].activations
+            activation_func = self.layers[index].activation_func
+            z = self.layers[index].z
+            self.activation_error[index] = np.multiply(self.layers[index + 1].
+                                                       weight_matrix.T.dot
+                                                       (self.activation_error
+                                                       [index + 1]),
+                                                       derivative_sigmoid(z))
 
-    def backprop_helper(self, index, y):
-        if not self.layers[index].layer_type == 'input':
-            if self.layers[index].layer_type == 'output':
-                self.activation_error[index] += \
-                                ((self.layers[index].activations - y) *
-                                 (self.layers[index].activation_func
-                                 (self.layers[index].z) *
-                                 (1 - self.layers[index].activation_func(
-                                  self.layers[index].z))))
-            else:
-                self.activation_error[index] += \
-                        (self.layers[index + 1].weight_matrix.T.dot
-                         (self.activation_error[index + 1]) *
-                         (self.layers[index].activation_func
-                         (self.layers[index].z) *
-                         (1 - self.layers[index].activation_func(
-                          self.layers[index].z))))
-
+        for index in range(1, self.num_layers):
             for row_index in range(self.weight_error[index].shape[0]):
                 for col_index in range(self.weight_error[index].shape[1]):
-                    self.weight_error[index][row_index][col_index] += \
-                                         (self.activation_error
-                                          [index][row_index] *
-                                          self.layers[index - 1].in_activations
-                                          [col_index])
+                    self.weight_error[index][row_index][col_index] = \
+                                          (self.activation_error
+                                           [index][row_index] *
+                                           self.layers[index].in_activations
+                                           [col_index])
 
-            return self.backprop_helper(index - 1, y)
+        for index in range(1, self.num_layers):
+            self.layers[index].weight_matrix = \
+                                              (self.layers[index].weight_matrix
+                                               - self.weight_error[index])
+            self.layers[index].biases = (self.layers[index].biases -
+                                         self.activation_error[index])
 
-        else:
-            return
+        if counter % 1000 == 0 and counter != 0:
+            print(f'Loss: {self.avg_loss / 1000}')
+            self.avg_loss = 0
 
     def convert_y(self):
 
@@ -191,12 +182,12 @@ class Network:
 
     def input_image(self, in_data):
 
-        for index in range(len(self.layers)):
+        for index in range(self.num_layers):
             if index == 0:
-                self.layers[0].set_activations(in_data)
+                self.layers[0].set_activations(in_data, index)
             else:
                 self.layers[index].set_activations(self.layers[index - 1].
-                                                   get_activations())
+                                                   get_activations(), index)
         return self.layers[self.num_layers - 1].get_activations()
 
     def display_output(self):
@@ -205,24 +196,29 @@ class Network:
 
 def main():
     nn = Network(layers=[Layer(784, 'sigmoid'),
-                 Layer(40, 'sigmoid'),
-                 Layer(20, 'sigmoid'),
+                 Layer(16, 'sigmoid'),
+                 Layer(16, 'sigmoid'),
                  Layer(10, 'sigmoid')])
 
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
     correct = 0
+    nn.training_size = int(input("Num images to train on: "))
     nn.train()
-    pyplot.subplot(330 + 1)
-    pyplot.imshow(x_train[37], cmap=pyplot.get_cmap('gray'))
-    pyplot.show()
 
     for index in range(x_test.shape[0]):
         results = nn.input_image(x_test[index].flatten())
         if results.argmax() == y_test[index]:
             correct += 1
 
-    print(f"The model got {correct} right answers, out of {y_test.shape[0]}.")
+    print(f"When trained with {nn.training_size} examples, "
+          f"the model's accuracy is {correct / y_test.shape[0]}.")
+    test_img = randrange(y_test.shape[0])
+    prediction = nn.input_image(x_test[test_img].flatten()).argmax()
+    print(f"The model thinks image #{test_img} is a {prediction}."
+          f" The label is {y_test[test_img]}.")
+    plt.imshow(x_test[test_img])
+    plt.show()
 
 
 if __name__ == "__main__":
