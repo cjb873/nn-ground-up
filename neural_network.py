@@ -96,6 +96,12 @@ class Network:
 
         self.init_layers()
 
+    def get_training_size(self):
+        return self.training_size
+
+    def set_training_size(self, new_size):
+        self.training_size = new_size
+
     def init_layers(self):
 
         for index in range(1, self.num_layers):
@@ -125,7 +131,7 @@ class Network:
 
     def backprop(self, counter):
 
-        self.input_image(self.x_train[counter].flatten())
+        self.predict(self.x_train[counter].flatten())
         self.init_errors()
         y = self.y_train[counter]
         last = self.num_layers - 1
@@ -135,7 +141,7 @@ class Network:
         derivative_sigmoid = (lambda z: activation_func(z) *
                               (1 - activation_func(z)))
 
-        self.avg_loss += (np.argmax(activations) - np.argmax(y)) ** 2
+        self.avg_loss += (np.argmax(y) - np.argmax(activations)) ** 2
         self.activation_error[last] = np.multiply((activations - y),
                                                   derivative_sigmoid(z))
 
@@ -180,7 +186,7 @@ class Network:
 
         return return_arr
 
-    def input_image(self, in_data):
+    def predict(self, in_data):
 
         for index in range(self.num_layers):
             if index == 0:
@@ -217,7 +223,7 @@ def main():
     prediction = nn.input_image(x_test[test_img].flatten()).argmax()
     print(f"The model thinks image #{test_img} is a {prediction}."
           f" The label is {y_test[test_img]}.")
-    plt.imshow(x_test[test_img])
+    plt.imshow(x_test[test_img], cmap='gray', vmin=0, vmax=255)
     plt.show()
 
 
