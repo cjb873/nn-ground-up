@@ -141,7 +141,7 @@ class Network:
         derivative_sigmoid = (lambda z: activation_func(z) *
                               (1 - activation_func(z)))
 
-        self.avg_loss += (np.argmax(y) - np.argmax(activations)) ** 2
+        self.avg_loss += np.sum(np.square((y - activations))
         self.activation_error[last] = np.multiply((activations - y),
                                                   derivative_sigmoid(z))
 
