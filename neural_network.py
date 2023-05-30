@@ -130,10 +130,10 @@ class Network:
                                                     dtype=float)
 
     def backprop(self, counter):
-
-        self.predict(self.x_train[counter].flatten())
+        digit = randrange(1, 60000)
+        self.predict(self.x_train[digit].flatten())
         self.init_errors()
-        y = self.y_train[counter]
+        y = self.y_train[digit]
         last = self.num_layers - 1
         z = self.layers[last].z
         activations = self.layers[last].activations
