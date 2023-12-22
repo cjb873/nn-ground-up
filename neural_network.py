@@ -172,7 +172,7 @@ class Network:
                                          self.activation_error[index])
 
         if counter % 1000 == 0 and counter != 0:
-            print(f'Loss: {self.avg_loss / 1000}')
+            print(f'Loss: {self.avg_loss / 2000}')
             self.avg_loss = 0
 
     def convert_y(self):
